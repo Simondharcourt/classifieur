@@ -12,11 +12,16 @@ import time
 import torch
 import traceback
 import logging
-import asyncio
 
 # Import local modules
 from classifiers import TFIDFClassifier, LLMClassifier
 from utils import load_data, export_data, visualize_results, validate_results
+from prompts import (
+    CATEGORY_SUGGESTION_PROMPT,
+    ADDITIONAL_CATEGORY_PROMPT,
+    VALIDATION_ANALYSIS_PROMPT,
+    CATEGORY_IMPROVEMENT_PROMPT
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -269,11 +274,7 @@ with gr.Blocks(title="Text Classification System") as demo:
                 
                     process_button = gr.Button("Process and Classify", visible=False)
 
-        
-
         results_df = gr.Dataframe(interactive=True, visible=False)
-        
-
         
         # Create containers for visualization and validation report
         with gr.Row(visible=False) as results_row:
@@ -285,7 +286,6 @@ with gr.Blocks(title="Text Classification System") as demo:
             with gr.Column():
                 validation_output = gr.Textbox(label="Validation Report", interactive=False)
                 improve_button = gr.Button("Improve Classification with Report", visible=False)
-
 
         # Function to load file and suggest categories
         def load_file_and_suggest_categories(file):
@@ -319,13 +319,7 @@ with gr.Blocks(title="Text Classification System") as demo:
                 
                 # Use LLM to suggest categories
                 if client:
-                    prompt = f"""
-                    Based on these example texts, suggest 5 appropriate categories for classification:
-                    
-                    {sample_texts[:5]}
-                    
-                    Return your answer as a comma-separated list of category names only.
-                    """
+                    prompt = CATEGORY_SUGGESTION_PROMPT.format("\n---\n".join(sample_texts[:5]))
                     try:
                         response = client.chat.completions.create(
                             model="gpt-3.5-turbo",
@@ -396,15 +390,10 @@ with gr.Blocks(title="Text Classification System") as demo:
                     sample_texts.extend(df[col].head(5).tolist())
                 
                 if client:
-                    prompt = f"""
-                    Based on these example texts and the existing categories ({', '.join(current_categories)}),
-                    suggest one additional appropriate category for classification.
-                    
-                    Example texts:
-                    {sample_texts[:5]}
-                    
-                    Return only the suggested category name, nothing else.
-                    """
+                    prompt = ADDITIONAL_CATEGORY_PROMPT.format(
+                        existing_categories=", ".join(current_categories),
+                        sample_texts="\n---\n".join(sample_texts[:5])
+                    )
                     try:
                         response = client.chat.completions.create(
                             model="gpt-3.5-turbo",
@@ -438,20 +427,10 @@ with gr.Blocks(title="Text Classification System") as demo:
             try:
                 # Extract insights from validation report
                 if client:
-                    prompt = f"""
-                    Based on this validation report, analyze the current classification and suggest improvements:
-                    
-                    {validation_report}
-                    
-                    Return your answer in JSON format with these fields:
-                    - suggested_categories: list of improved category names (must be different from current categories: {categories})
-                    - confidence_threshold: a number between 0 and 100 for minimum confidence
-                    - focus_areas: list of specific aspects to focus on during classification
-                    - analysis: a brief analysis of what needs improvement
-                    - new_categories_needed: boolean indicating if new categories should be added
-                    
-                    JSON response:
-                    """
+                    prompt = VALIDATION_ANALYSIS_PROMPT.format(
+                        validation_report=validation_report,
+                        current_categories=categories
+                    )
                     try:
                         response = client.chat.completions.create(
                             model="gpt-4",
@@ -475,16 +454,11 @@ with gr.Blocks(title="Text Classification System") as demo:
                                     temp_df = load_data(file.name)
                                 sample_texts.extend(temp_df[col].head(5).tolist())
                             
-                            category_prompt = f"""
-                            Based on these example texts and the current categories ({', '.join(current_categories)}),
-                            suggest new categories that would improve the classification. The validation report indicates:
-                            {improvements.get('analysis', '')}
-                            
-                            Example texts:
-                            {sample_texts[:5]}
-                            
-                            Return your answer as a comma-separated list of new category names only.
-                            """
+                            category_prompt = CATEGORY_IMPROVEMENT_PROMPT.format(
+                                current_categories=", ".join(current_categories),
+                                analysis=improvements.get('analysis', ''),
+                                sample_texts="\n---\n".join(sample_texts[:5])
+                            )
                             
                             category_response = client.chat.completions.create(
                                 model="gpt-4",

@@ -60,33 +60,19 @@ brainbox4/
 ```
 
 ## 🔧 Optimisations de Performance
-
-### Traitement Parallèle
-- Exploitation d'`asyncio` pour effectuer des appels API simultanés.
-- Gestion par lots de 20 textes par requête pour optimiser le débit.
-
-### Sélection Intelligente du Modèle
-- **GPT-3.5** : Utilisé par défaut pour moins de 100 textes.
-- **GPT-3.5-16k** : Adapté pour des volumes de 100 à 500 textes.
-- **GPT-4** : Préféré pour plus de 500 textes.
-- Intégration future de modèles hébergés localement pour une flexibilité accrue.
+- parallélisation des requêtes API par lot de 10 maximum pour accélérer la classification.
+- suggestion automatique du modèle.
 
 ## 🎨 Optimisations de l'Interface Utilisateur
-
-### Suggestions Automatiques
-- Propositions automatiques de catégories et de colonnes basées sur un échantillon de textes.
-
-### Évaluation et Reclassification
+- Suggestion automatiques de catégories et de colonnes basées sur un échantillon de textes.
 - Rapport d'évaluation détaillé après classification : analyse des catégories, détection des incohérences, suggestions d'amélioration.
-- Proposition de reclassification des textes selon les recommandations du rapport, ajustement des catégories et seuils de confiance pour améliorer la précision.
-
+- Suggestion de reclassification des textes selon les recommandations du rapport.
 
 ## ✨ Fonctionnalités Principales
-
 1. **Classification Rapide**
    - Traitement parallèle des textes
    - Support des fichiers Excel/CSV
-   - Scores de confiance
+   - Scores de confiance et justification
 
 2. **Interface Simple**
    - Upload de fichiers

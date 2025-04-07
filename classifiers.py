@@ -7,6 +7,7 @@ import random
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
+from prompts import CATEGORY_SUGGESTION_PROMPT, TEXT_CLASSIFICATION_PROMPT
 
 class BaseClassifier:
     """Base class for text classifiers"""
@@ -183,14 +184,7 @@ class LLMClassifier(BaseClassifier):
         else:
             sample_texts = texts
         
-        prompt = """
-        I have a collection of texts that I need to classify into categories. Here are some examples:
-        
-        {}
-        
-        Based on these examples, suggest up 2 to 5 appropriate categories for classification. 
-        Return your answer as a comma-separated list of category names only.
-        """.format("\n---\n".join(sample_texts))
+        prompt = CATEGORY_SUGGESTION_PROMPT.format("\n---\n".join(sample_texts))
         
         try:
             response = self.client.chat.completions.create(
@@ -212,20 +206,10 @@ class LLMClassifier(BaseClassifier):
     
     def _classify_text(self, text: str, categories: List[str]) -> Dict[str, Any]:
         """Use LLM to classify a single text"""
-        categories_str = ", ".join(categories)
-        
-        prompt = f"""
-        Classify the following text into one of these categories: {categories_str}
-        
-        Text: {text}
-        
-        Return your answer in JSON format with these fields:
-        - category: the chosen category from the list
-        - confidence: a value between 0 and 100 indicating your confidence in this classification (as a percentage)
-        - explanation: a brief explanation of why this category was chosen (1-2 sentences)
-        
-        JSON response:
-        """
+        prompt = TEXT_CLASSIFICATION_PROMPT.format(
+            categories=", ".join(categories),
+            text=text
+        )
         
         try:
             response = self.client.chat.completions.create(

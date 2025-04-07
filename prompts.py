@@ -2,7 +2,7 @@
 
 # Category suggestion prompt
 CATEGORY_SUGGESTION_PROMPT = """
-Based on these example texts, suggest 5 appropriate categories for classification:
+Based on these example texts, suggest between 3 and 5 appropriate categories for classification:
 
 {}
 

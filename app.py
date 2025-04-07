@@ -267,7 +267,7 @@ with gr.Blocks(title="Text Classification System") as demo:
                             ("TF-IDF + LLM (Hybride, >1000 lignes)", "hybrid")
                         ],
                         label="Modèle de classification",
-                        value="tfidf",
+                        value="gpt35",
                         visible=False
                     )
                     show_explanations = gr.Checkbox(label="Show Explanations", value=True, visible=False)
@@ -324,7 +324,7 @@ with gr.Blocks(title="Text Classification System") as demo:
                         response = client.chat.completions.create(
                             model="gpt-3.5-turbo",
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.2,
+                            temperature=0,
                             max_tokens=100
                         )
                         suggested_cats = [cat.strip() for cat in response.choices[0].message.content.strip().split(",")]
@@ -388,13 +388,13 @@ with gr.Blocks(title="Text Classification System") as demo:
                 if client:
                     prompt = ADDITIONAL_CATEGORY_PROMPT.format(
                         existing_categories=", ".join(current_categories),
-                        sample_texts="\n---\n".join(sample_texts[:5])
+                        sample_texts="\n---\n".join(sample_texts[:10])
                     )
                     try:
                         response = client.chat.completions.create(
                             model="gpt-3.5-turbo",
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.2,
+                            temperature=0,
                             max_tokens=50
                         )
                         new_cat = response.choices[0].message.content.strip()
@@ -431,7 +431,7 @@ with gr.Blocks(title="Text Classification System") as demo:
                         response = client.chat.completions.create(
                             model="gpt-4",
                             messages=[{"role": "user", "content": prompt}],
-                            temperature=0.2,
+                            temperature=0,
                             max_tokens=300
                         )
                         improvements = json.loads(response.choices[0].message.content.strip())
@@ -448,18 +448,18 @@ with gr.Blocks(title="Text Classification System") as demo:
                                     temp_df = load_data(file)
                                 else:
                                     temp_df = load_data(file.name)
-                                sample_texts.extend(temp_df[col].head(5).tolist())
+                                sample_texts.extend(temp_df[col].head(10).tolist())
                             
                             category_prompt = CATEGORY_IMPROVEMENT_PROMPT.format(
                                 current_categories=", ".join(current_categories),
                                 analysis=improvements.get('analysis', ''),
-                                sample_texts="\n---\n".join(sample_texts[:5])
+                                sample_texts="\n---\n".join(sample_texts[:10])
                             )
                             
                             category_response = client.chat.completions.create(
                                 model="gpt-4",
                                 messages=[{"role": "user", "content": category_prompt}],
-                                temperature=0.2,
+                                temperature=0,
                                 max_tokens=100
                             )
                             

@@ -154,25 +154,28 @@ class LLMClassifier(BaseClassifier):
         
         # Process texts in parallel
         with ThreadPoolExecutor(max_workers=10) as executor:
-            # Submit all tasks
-            future_to_text = {
-                executor.submit(self._classify_text, text, categories): text 
-                for text in texts
+            # Submit all tasks with their original indices
+            future_to_index = {
+                executor.submit(self._classify_text, text, categories): idx 
+                for idx, text in enumerate(texts)
             }
             
+            # Initialize results list with None values
+            results = [None] * len(texts)
+            
             # Collect results as they complete
-            results = []
-            for future in as_completed(future_to_text):
+            for future in as_completed(future_to_index):
+                original_idx = future_to_index[future]
                 try:
                     result = future.result()
-                    results.append(result)
+                    results[original_idx] = result
                 except Exception as e:
                     print(f"Error processing text: {str(e)}")
-                    results.append({
+                    results[original_idx] = {
                         "category": categories[0],
                         "confidence": 50,
                         "explanation": f"Error during classification: {str(e)}"
-                    })
+                    }
         
         return results
     

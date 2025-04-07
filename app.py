@@ -366,10 +366,6 @@ with gr.Blocks(title="Text Classification System") as demo:
             if df is None:
                 return gr.Row(visible=False), gr.File(visible=False), gr.File(visible=False), gr.Dataframe(visible=False)
             
-            # Sort by category if it exists
-            if "Category" in df.columns:
-                df = df.sort_values("Category")
-            
             # Export to both formats
             csv_path = export_results(df, "csv")
             excel_path = export_results(df, "excel")

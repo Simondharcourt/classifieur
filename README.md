@@ -18,8 +18,8 @@ Cette application gradio est un système de classification de texte basé sur l'
 
 1. Cloner le dépôt :
 ```bash
-git clone https://github.com/simon-dharcourt/brainbox4.git
-cd brainbox4
+git clone https://github.com/simon-dharcourt/classifieur.git
+cd classifieur
 ```
 
 2. Installer les dépendances :

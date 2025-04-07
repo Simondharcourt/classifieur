@@ -58,6 +58,10 @@ def update_api_key(api_key):
 
 def process_file(file, text_columns, categories, classifier_type, show_explanations):
     """Process the uploaded file and classify text data"""
+    # Initialize result_df and validation_report
+    result_df = None
+    validation_report = None
+    
     try:
         # Load data from file
         if isinstance(file, str):
@@ -358,14 +362,19 @@ with gr.Blocks(title="Text Classification System") as demo:
         
         # Function to show results after processing
         def show_results(df, validation_report):
+            """Show the results after processing"""
             if df is None:
-                return gr.Row(visible=False), gr.File(visible=False), gr.File(visible=False), gr.Dataframe(visible=False)
+                return gr.Row(visible=False), gr.File(visible=False), gr.File(visible=False), gr.Dataframe(visible=False), gr.Dataframe(visible=False)
+            
+            # Sort by category if it exists
+            if "Category" in df.columns:
+                df = df.sort_values("Category")
             
             # Export to both formats
             csv_path = export_results(df, "csv")
             excel_path = export_results(df, "excel")
             
-            return gr.Row(visible=True), gr.File(value=csv_path, visible=True), gr.File(value=excel_path, visible=True), gr.Dataframe(value=df, visible=True)
+            return gr.Row(visible=True), gr.File(value=csv_path, visible=True), gr.File(value=excel_path, visible=True), gr.Dataframe(value=df, visible=True), gr.Dataframe(value=df, visible=True)
         
         # Function to suggest a new category
         def suggest_new_category(file, current_categories, text_columns):
@@ -540,13 +549,17 @@ with gr.Blocks(title="Text Classification System") as demo:
         )
         
         process_button.click(
+            lambda: gr.Dataframe(visible=True),
+            inputs=[],
+            outputs=[results_df]
+        ).then(
             process_file,
             inputs=[file_input, text_column, categories, classifier_type, show_explanations],
             outputs=[results_df, validation_output]
         ).then(
             show_results,
             inputs=[results_df, validation_output],
-            outputs=[results_row, csv_download, excel_download, results_df]
+            outputs=[results_row, csv_download, excel_download, results_df, original_df]
         ).then(
             visualize_results,
             inputs=[results_df, text_column],

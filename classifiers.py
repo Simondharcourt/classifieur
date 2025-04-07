@@ -5,6 +5,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import cosine_similarity
 import random
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict, Any, Optional
 
 class BaseClassifier:
     """Base class for text classifiers"""
@@ -143,21 +145,37 @@ class LLMClassifier(BaseClassifier):
         self.client = client
         self.model = model
     
-    def classify(self, texts, categories=None):
-        """Classify texts using an LLM"""
+    def classify(self, texts: List[str], categories: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """Classify texts using an LLM with parallel processing"""
         if not categories:
             # First, use LLM to generate appropriate categories
             categories = self._suggest_categories(texts)
         
-        results = []
-        for text in texts:
-            # Classify each text individually
-            result = self._classify_text(text, categories)
-            results.append(result)
+        # Process texts in parallel
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit all tasks
+            future_to_text = {
+                executor.submit(self._classify_text, text, categories): text 
+                for text in texts
+            }
+            
+            # Collect results as they complete
+            results = []
+            for future in as_completed(future_to_text):
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as e:
+                    print(f"Error processing text: {str(e)}")
+                    results.append({
+                        "category": categories[0],
+                        "confidence": 50,
+                        "explanation": f"Error during classification: {str(e)}"
+                    })
         
         return results
     
-    def _suggest_categories(self, texts, sample_size=20):
+    def _suggest_categories(self, texts: List[str], sample_size: int = 20) -> List[str]:
         """Use LLM to suggest appropriate categories for the dataset"""
         # Take a sample of texts to avoid token limitations
         if len(texts) > sample_size:
@@ -192,7 +210,7 @@ class LLMClassifier(BaseClassifier):
             print(f"Error suggesting categories: {str(e)}")
             return self._generate_default_categories(texts)
     
-    def _classify_text(self, text, categories):
+    def _classify_text(self, text: str, categories: List[str]) -> Dict[str, Any]:
         """Use LLM to classify a single text"""
         categories_str = ", ".join(categories)
         

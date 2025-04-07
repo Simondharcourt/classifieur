@@ -12,6 +12,7 @@ import time
 import torch
 import traceback
 import logging
+import asyncio
 
 # Import local modules
 from classifiers import TFIDFClassifier, LLMClassifier
@@ -106,15 +107,11 @@ def process_file(file, text_columns, categories, classifier_type, show_explanati
         if classifier_type == "tfidf":
             classifier = TFIDFClassifier()
             results = classifier.classify(texts, category_list)
-        elif classifier_type == "gpt35":
+        elif classifier_type in ["gpt35", "gpt4"]:
             if client is None:
                 return None, "Erreur : Le client API n'est pas initialisé. Veuillez configurer une clé API valide dans l'onglet 'Setup'."
-            classifier = LLMClassifier(client=client, model="gpt-3.5-turbo")
-            results = classifier.classify(texts, category_list)
-        elif classifier_type == "gpt4":
-            if client is None:
-                return None, "Erreur : Le client API n'est pas initialisé. Veuillez configurer une clé API valide dans l'onglet 'Setup'."
-            classifier = LLMClassifier(client=client, model="gpt-4")
+            model = "gpt-3.5-turbo" if classifier_type == "gpt35" else "gpt-4"
+            classifier = LLMClassifier(client=client, model=model)
             results = classifier.classify(texts, category_list)
         else:  # hybrid
             if client is None:
@@ -126,12 +123,21 @@ def process_file(file, text_columns, categories, classifier_type, show_explanati
             # Second pass with LLM for low confidence results
             llm_classifier = LLMClassifier(client=client, model="gpt-3.5-turbo")
             results = []
+            low_confidence_texts = []
+            low_confidence_indices = []
+            
             for i, (text, tfidf_result) in enumerate(zip(texts, tfidf_results)):
                 if tfidf_result["confidence"] < 70:  # If confidence is below 70%
-                    llm_result = llm_classifier.classify([text], category_list)[0]
-                    results.append(llm_result)
+                    low_confidence_texts.append(text)
+                    low_confidence_indices.append(i)
+                    results.append(None)  # Placeholder
                 else:
                     results.append(tfidf_result)
+            
+            if low_confidence_texts:
+                llm_results = llm_classifier.classify(low_confidence_texts, category_list)
+                for idx, llm_result in zip(low_confidence_indices, llm_results):
+                    results[idx] = llm_result
         
         # Create results dataframe
         result_df = df.copy()
@@ -364,7 +370,7 @@ with gr.Blocks(title="Text Classification System") as demo:
         def show_results(df, validation_report):
             """Show the results after processing"""
             if df is None:
-                return gr.Row(visible=False), gr.File(visible=False), gr.File(visible=False), gr.Dataframe(visible=False), gr.Dataframe(visible=False)
+                return gr.Row(visible=False), gr.File(visible=False), gr.File(visible=False), gr.Dataframe(visible=False)
             
             # Sort by category if it exists
             if "Category" in df.columns:
@@ -374,7 +380,7 @@ with gr.Blocks(title="Text Classification System") as demo:
             csv_path = export_results(df, "csv")
             excel_path = export_results(df, "excel")
             
-            return gr.Row(visible=True), gr.File(value=csv_path, visible=True), gr.File(value=excel_path, visible=True), gr.Dataframe(value=df, visible=True), gr.Dataframe(value=df, visible=True)
+            return gr.Row(visible=True), gr.File(value=csv_path, visible=True), gr.File(value=excel_path, visible=True), gr.Dataframe(value=df, visible=True)
         
         # Function to suggest a new category
         def suggest_new_category(file, current_categories, text_columns):

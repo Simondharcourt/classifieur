@@ -64,6 +64,16 @@ def visualize_results(df, text_column, category_column="Category"):
     Returns:
         matplotlib.figure.Figure: Visualization figure
     """
+    # Check if category column exists
+    if category_column not in df.columns:
+        # Create a simple figure with a message
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.text(0.5, 0.5, "No categories to display", 
+                ha='center', va='center', fontsize=12)
+        ax.set_title('No Classification Results Available')
+        plt.tight_layout()
+        return fig
+    
     # Get categories and their counts
     category_counts = df[category_column].value_counts()
     

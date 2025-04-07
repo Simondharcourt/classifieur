@@ -559,7 +559,7 @@ with gr.Blocks(title="Text Classification System") as demo:
         ).then(
             show_results,
             inputs=[results_df, validation_output],
-            outputs=[results_row, csv_download, excel_download, results_df, original_df]
+            outputs=[results_row, csv_download, excel_download, results_df]
         ).then(
             visualize_results,
             inputs=[results_df, text_column],

@@ -53,7 +53,6 @@ python app.py
 brainbox4/
 ├── app.py              # Interface utilisateur
 ├── classifier.py       # Classification asynchrone
-├── config.py          # Configuration
 ├── prompts.py         # Templates LLM
 ├── utils.py           # Utilitaires
 └── requirements.txt   # Dépendances

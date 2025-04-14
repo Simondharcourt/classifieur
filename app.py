@@ -12,6 +12,10 @@ import time
 import torch
 import traceback
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import local modules
 from classifiers import TFIDFClassifier, LLMClassifier

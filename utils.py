@@ -174,38 +174,3 @@ def validate_results(df, text_columns, client):
 
     except Exception as e:
         return f"Validation failed: {str(e)}"
-
-
-def create_example_file():
-    """
-    Create an example CSV file for testing
-
-    Returns:
-        str: Path to the created file
-    """
-    # Create some example data
-    data = {
-        "text": [
-            "I absolutely love this product! It exceeded all my expectations.",
-            "The service was terrible and the staff was rude.",
-            "The product arrived on time but was slightly damaged.",
-            "I have mixed feelings about this. Some features are great, others not so much.",
-            "This is a complete waste of money. Do not buy!",
-            "The customer service team was very helpful in resolving my issue.",
-            "It's okay, nothing special but gets the job done.",
-            "I'm extremely disappointed with the quality of this product.",
-            "This is the best purchase I've made all year!",
-            "It's reasonably priced and works as expected.",
-        ]
-    }
-
-    # Create dataframe
-    df = pd.DataFrame(data)
-
-    # Save to a CSV file
-    example_dir = "examples"
-    os.makedirs(example_dir, exist_ok=True)
-    file_path = os.path.join(example_dir, "sample_reviews.csv")
-    df.to_csv(file_path, index=False)
-
-    return file_path

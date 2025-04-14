@@ -60,4 +60,4 @@ Example texts:
 {}
 
 Return your answer as a comma-separated list of new category names only.
-""" 
+"""

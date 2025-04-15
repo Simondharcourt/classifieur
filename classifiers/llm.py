@@ -7,6 +7,11 @@ import random
 import json
 import asyncio
 from typing import List, Dict, Any, Optional
+import sys
+import os
+
+# Add the project root to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from prompts import CATEGORY_SUGGESTION_PROMPT, TEXT_CLASSIFICATION_PROMPT
 
 from .base import BaseClassifier
@@ -28,11 +33,16 @@ class LLMClassifier(BaseClassifier):
         )
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0,
-                max_tokens=200,
+            # Use the synchronous client method but run it in a thread pool
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0,
+                    max_tokens=200,
+                )
             )
 
             # Parse JSON response
@@ -87,11 +97,16 @@ class LLMClassifier(BaseClassifier):
         prompt = CATEGORY_SUGGESTION_PROMPT.format("\n---\n".join(sample_texts))
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=100,
+            # Use the synchronous client method but run it in a thread pool
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=100,
+                )
             )
 
             # Parse response to get categories

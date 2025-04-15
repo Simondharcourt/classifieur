@@ -29,7 +29,7 @@ Based on these example texts and the existing categories ({existing_categories})
 suggest one additional appropriate category for classification.
 
 Example texts:
-{}
+{sample_texts}
 
 Return only the suggested category name, nothing else.
 """
@@ -57,7 +57,7 @@ suggest new categories that would improve the classification. The validation rep
 {analysis}
 
 Example texts:
-{}
+{sample_texts}
 
 Return your answer as a comma-separated list of new category names only.
 """

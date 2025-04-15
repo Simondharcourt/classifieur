@@ -139,7 +139,8 @@ with gr.Blocks(title="Text Classification System") as demo:
                     excel_download = gr.File(label="Download Excel", visible=False)
             with gr.Column():
                 validation_output = gr.Textbox(
-                    label="Validation Report", interactive=False
+                    label="Validation Report", interactive=True,
+                    lines=15
                 )
                 improve_button = gr.Button(
                     "Improve Classification with Report", visible=False

@@ -6,7 +6,7 @@ import json
 from classifiers.llm import LLMClassifier
 from litellm import completion
 import asyncio
-
+from client import get_client
 app = FastAPI()
 
 # Configure CORS
@@ -18,8 +18,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+client = get_client()
+
 # Initialize the LLM classifier
-classifier = LLMClassifier(client=completion, model="gpt-3.5-turbo")
+classifier = LLMClassifier(client=client, model="gpt-3.5-turbo")
 
 class TextInput(BaseModel):
     text: str
@@ -61,4 +63,4 @@ async def suggest_categories(texts: List[str]):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True) 

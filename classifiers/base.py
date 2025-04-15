@@ -1,5 +1,3 @@
-
-
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -15,10 +13,10 @@ from prompts import CATEGORY_SUGGESTION_PROMPT, TEXT_CLASSIFICATION_PROMPT
 class BaseClassifier:
     """Base class for text classifiers"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
-    def classify(self, texts, categories=None):
+    def classify(self, texts: List[str], categories: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """
         Classify a list of texts into categories
 
@@ -31,7 +29,7 @@ class BaseClassifier:
         """
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _generate_default_categories(self, texts, num_clusters=5):
+    def _generate_default_categories(self, texts: List[str], num_clusters: int = 5) -> List[str]:
         """
         Generate default categories based on text clustering
 
@@ -43,6 +41,6 @@ class BaseClassifier:
             list: List of category names
         """
         # Simple implementation - in real system this would be more sophisticated
-        default_categories = [f"Category {i+1}" for i in range(num_clusters)]
+        default_categories: List[str] = [f"Category {i+1}" for i in range(num_clusters)]
         return default_categories
 

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Tuple
 import json
 from classifiers.llm import LLMClassifier
 from litellm import completion
@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-app = FastAPI()
+app: FastAPI = FastAPI()
 
 # Configure CORS
 app.add_middleware(
@@ -25,8 +25,10 @@ app.add_middleware(
 )
 
 # Initialize client with API key from environment
-api_key = os.environ.get("OPENAI_API_KEY")
+api_key: Optional[str] = os.environ.get("OPENAI_API_KEY")
 if api_key:
+    success: bool
+    message: str
     success, message = initialize_client(api_key)
     if not success:
         raise RuntimeError(f"Failed to initialize OpenAI client: {message}")
@@ -36,7 +38,7 @@ if not client:
     raise RuntimeError("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.")
 
 # Initialize the LLM classifier
-classifier = LLMClassifier(client=client, model="gpt-3.5-turbo")
+classifier: LLMClassifier = LLMClassifier(client=client, model="gpt-3.5-turbo")
 
 class TextInput(BaseModel):
     text: str
@@ -51,14 +53,14 @@ class CategorySuggestionResponse(BaseModel):
     categories: List[str]
 
 @app.post("/classify", response_model=ClassificationResponse)
-async def classify_text(text_input: TextInput):
+async def classify_text(text_input: TextInput) -> ClassificationResponse:
     try:
         # Use async classification
-        results = await classifier.classify_async(
+        results: List[Dict[str, Any]] = await classifier.classify_async(
             [text_input.text],
             text_input.categories
         )
-        result = results[0]  # Get first result since we're classifying one text
+        result: Dict[str, Any] = results[0]  # Get first result since we're classifying one text
         
         return ClassificationResponse(
             category=result["category"],
@@ -69,9 +71,9 @@ async def classify_text(text_input: TextInput):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/suggest-categories", response_model=CategorySuggestionResponse)
-async def suggest_categories(texts: List[str]):
+async def suggest_categories(texts: List[str]) -> CategorySuggestionResponse:
     try:
-        categories = await classifier._suggest_categories_async(texts)
+        categories: List[str] = await classifier._suggest_categories_async(texts)
         return CategorySuggestionResponse(categories=categories)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

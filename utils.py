@@ -6,9 +6,12 @@ from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 import tempfile
 from prompts import VALIDATION_PROMPT
+from typing import List, Optional, Any, Union
+from pathlib import Path
+from matplotlib.figure import Figure
 
 
-def load_data(file_path):
+def load_data(file_path: Union[str, Path]) -> pd.DataFrame:
     """
     Load data from an Excel or CSV file
 
@@ -18,7 +21,7 @@ def load_data(file_path):
     Returns:
         pd.DataFrame: Loaded data
     """
-    file_ext = os.path.splitext(file_path)[1].lower()
+    file_ext: str = os.path.splitext(file_path)[1].lower()
 
     if file_ext == ".xlsx" or file_ext == ".xls":
         return pd.read_excel(file_path)
@@ -30,7 +33,7 @@ def load_data(file_path):
         )
 
 
-def export_data(df, file_name, format_type="excel"):
+def export_data(df: pd.DataFrame, file_name: str, format_type: str = "excel") -> str:
     """
     Export dataframe to file
 
@@ -43,11 +46,11 @@ def export_data(df, file_name, format_type="excel"):
         str: Path to the exported file
     """
     # Create export directory if it doesn't exist
-    export_dir = "exports"
+    export_dir: str = "exports"
     os.makedirs(export_dir, exist_ok=True)
 
     # Full path for the export file
-    export_path = os.path.join(export_dir, file_name)
+    export_path: str = os.path.join(export_dir, file_name)
 
     # Export based on format type
     if format_type == "excel":
@@ -58,7 +61,7 @@ def export_data(df, file_name, format_type="excel"):
     return export_path
 
 
-def visualize_results(df, text_column, category_column="Category"):
+def visualize_results(df: pd.DataFrame, text_column: str, category_column: str = "Category") -> Figure:
     """
     Create visualization of classification results
 
@@ -73,6 +76,8 @@ def visualize_results(df, text_column, category_column="Category"):
     # Check if category column exists
     if category_column not in df.columns:
         # Create a simple figure with a message
+        fig: Figure
+        ax: Any
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.text(
             0.5, 0.5, "No categories to display", ha="center", va="center", fontsize=12
@@ -82,17 +87,19 @@ def visualize_results(df, text_column, category_column="Category"):
         return fig
 
     # Get categories and their counts
-    category_counts = df[category_column].value_counts()
+    category_counts: pd.Series = df[category_column].value_counts()
 
     # Create a new figure
+    fig: Figure
+    ax: Any
     fig, ax = plt.subplots(figsize=(10, 6))
 
     # Create the histogram
-    bars = ax.bar(category_counts.index, category_counts.values)
+    bars: Any = ax.bar(category_counts.index, category_counts.values)
 
     # Add value labels on top of each bar
     for bar in bars:
-        height = bar.get_height()
+        height: float = bar.get_height()
         ax.text(
             bar.get_x() + bar.get_width() / 2.0,
             height,
@@ -117,7 +124,7 @@ def visualize_results(df, text_column, category_column="Category"):
     return fig
 
 
-def validate_results(df, text_columns, client):
+def validate_results(df: pd.DataFrame, text_columns: List[str], client: Any) -> str:
     """
     Use LLM to validate the classification results
 
@@ -131,33 +138,33 @@ def validate_results(df, text_columns, client):
     """
     try:
         # Sample a few rows for validation
-        sample_size = min(5, len(df))
-        sample_df = df.sample(n=sample_size, random_state=42)
+        sample_size: int = min(5, len(df))
+        sample_df: pd.DataFrame = df.sample(n=sample_size, random_state=42)
 
         # Build validation prompts
-        validation_prompts = []
+        validation_prompts: List[str] = []
         for _, row in sample_df.iterrows():
             # Combine text from all selected columns
-            text = " ".join(str(row[col]) for col in text_columns)
-            assigned_category = row["Category"]
-            confidence = row["Confidence"]
+            text: str = " ".join(str(row[col]) for col in text_columns)
+            assigned_category: str = row["Category"]
+            confidence: float = row["Confidence"]
 
             validation_prompts.append(
                 f"Text: {text}\nAssigned Category: {assigned_category}\nConfidence: {confidence}\n"
             )
 
         # Use the prompt from prompts.py
-        prompt = VALIDATION_PROMPT.format("\n---\n".join(validation_prompts))
+        prompt: str = VALIDATION_PROMPT.format("\n---\n".join(validation_prompts))
 
         # Call LLM API
-        response = client.chat.completions.create(
+        response: Any = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=400,
         )
 
-        validation_report = response.choices[0].message.content.strip()
+        validation_report: str = response.choices[0].message.content.strip()
         return validation_report
 
     except Exception as e:

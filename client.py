@@ -1,19 +1,20 @@
 from litellm import OpenAI
 import os
 from dotenv import load_dotenv
+from typing import Optional, Tuple, Any
 
 # Load environment variables
 load_dotenv()
 
 # Initialize client as None
-client = None
+client: Optional[OpenAI] = None
 
-def get_client():
+def get_client() -> Optional[OpenAI]:
     """Get the OpenAI client instance"""
     global client
     return client
 
-def initialize_client(api_key=None):
+def initialize_client(api_key: Optional[str] = None) -> Tuple[bool, str]:
     """Initialize the OpenAI client with an API key"""
     global client
     import logging
@@ -28,7 +29,7 @@ def initialize_client(api_key=None):
     try:
         client = OpenAI(api_key=api_key)
         # Test the connection with a simple request
-        response = client.chat.completions.create(
+        response: Any = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": "test"}],
             max_tokens=5,
@@ -37,6 +38,6 @@ def initialize_client(api_key=None):
         return True, "API Key updated and verified successfully"
     except Exception as e:
         client = None
-        error_message = f"Failed to initialize client: {str(e)}"
+        error_message: str = f"Failed to initialize client: {str(e)}"
         logging.error(error_message)
         return False, error_message

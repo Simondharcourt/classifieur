@@ -1,13 +1,14 @@
 import requests
 import json
+from typing import List, Dict, Any, Optional
 
-BASE_URL = "http://localhost:8000"
+BASE_URL: str = "http://localhost:8000"
 
-def test_classify_text():
+def test_classify_text() -> None:
     # Load emails from CSV file
     import csv
     
-    emails = []
+    emails: List[Dict[str, str]] = []
     with open("examples/emails.csv", "r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         for row in reader:
@@ -15,7 +16,7 @@ def test_classify_text():
     
     # Test with default categories using email content
     for email in emails[:5]:
-        response = requests.post(
+        response: requests.Response = requests.post(
             f"{BASE_URL}/classify",
             json={"text": email["contenu"]}
         )
@@ -23,11 +24,11 @@ def test_classify_text():
         print(json.dumps(response.json(), indent=2))
 
 
-def test_suggest_categories():
+def test_suggest_categories() -> None:
     # Load reviews from CSV file
     import csv
     
-    texts = []
+    texts: List[str] = []
     with open("examples/reviews.csv", "r", encoding="utf-8") as file:
         reader = csv.DictReader(file)
         for row in reader:
@@ -35,7 +36,7 @@ def test_suggest_categories():
     
     # Use the first few reviews for testing
     texts = texts[:5]
-    response = requests.post(
+    response: requests.Response = requests.post(
         f"{BASE_URL}/suggest-categories",
         json=texts
     )

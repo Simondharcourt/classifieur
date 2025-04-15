@@ -6,9 +6,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 import random
 import json
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import sys
 import os
+from litellm import OpenAI
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,22 +21,22 @@ from .base import BaseClassifier
 class LLMClassifier(BaseClassifier):
     """Classifier using a Large Language Model for more accurate but slower classification"""
 
-    def __init__(self, client, model="gpt-3.5-turbo"):
+    def __init__(self, client: OpenAI, model: str = "gpt-3.5-turbo") -> None:
         super().__init__()
-        self.client = client
-        self.model = model
+        self.client: OpenAI = client
+        self.model: str = model
 
     async def _classify_text_async(self, text: str, categories: List[str]) -> Dict[str, Any]:
         """Async version of text classification"""
-        prompt = TEXT_CLASSIFICATION_PROMPT.format(
+        prompt: str = TEXT_CLASSIFICATION_PROMPT.format(
             categories=", ".join(categories),
             text=text
         )
 
         try:
             # Use the synchronous client method but run it in a thread pool
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
+            loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+            response: Any = await loop.run_in_executor(
                 None,
                 lambda: self.client.chat.completions.create(
                     model=self.model,
@@ -46,8 +47,8 @@ class LLMClassifier(BaseClassifier):
             )
 
             # Parse JSON response
-            response_text = response.choices[0].message.content.strip()
-            result = json.loads(response_text)
+            response_text: str = response.choices[0].message.content.strip()
+            result: Dict[str, Any] = json.loads(response_text)
 
             # Ensure all required fields are present
             if not all(k in result for k in ["category", "confidence", "explanation"]):
@@ -68,7 +69,7 @@ class LLMClassifier(BaseClassifier):
             return result
         except json.JSONDecodeError:
             # Fall back to simple parsing if JSON fails
-            category = categories[0]  # Default
+            category: str = categories[0]  # Default
             for cat in categories:
                 if cat.lower() in response_text.lower():
                     category = cat
@@ -90,16 +91,16 @@ class LLMClassifier(BaseClassifier):
         """Async version of category suggestion"""
         # Take a sample of texts to avoid token limitations
         if len(texts) > sample_size:
-            sample_texts = random.sample(texts, sample_size)
+            sample_texts: List[str] = random.sample(texts, sample_size)
         else:
-            sample_texts = texts
+            sample_texts: List[str] = texts
 
-        prompt = CATEGORY_SUGGESTION_PROMPT.format("\n---\n".join(sample_texts))
+        prompt: str = CATEGORY_SUGGESTION_PROMPT.format("\n---\n".join(sample_texts))
 
         try:
             # Use the synchronous client method but run it in a thread pool
-            loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
+            loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+            response: Any = await loop.run_in_executor(
                 None,
                 lambda: self.client.chat.completions.create(
                     model=self.model,
@@ -110,8 +111,8 @@ class LLMClassifier(BaseClassifier):
             )
 
             # Parse response to get categories
-            categories_text = response.choices[0].message.content.strip()
-            categories = [cat.strip() for cat in categories_text.split(",")]
+            categories_text: str = response.choices[0].message.content.strip()
+            categories: List[str] = [cat.strip() for cat in categories_text.split(",")]
 
             return categories
         except Exception as e:
@@ -127,10 +128,10 @@ class LLMClassifier(BaseClassifier):
             categories = await self._suggest_categories_async(texts)
 
         # Create tasks for all texts
-        tasks = [self._classify_text_async(text, categories) for text in texts]
+        tasks: List[asyncio.Task] = [self._classify_text_async(text, categories) for text in texts]
         
         # Gather all results
-        results = await asyncio.gather(*tasks)
+        results: List[Dict[str, Any]] = await asyncio.gather(*tasks)
         return results
 
     def classify(

@@ -1,4 +1,3 @@
-
 import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -9,6 +8,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
 from prompts import CATEGORY_SUGGESTION_PROMPT, TEXT_CLASSIFICATION_PROMPT
+from scipy.sparse import csr_matrix
 
 from .base import BaseClassifier
 
@@ -16,25 +16,25 @@ from .base import BaseClassifier
 class TFIDFClassifier(BaseClassifier):
     """Classifier using TF-IDF and clustering for fast classification"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.vectorizer = TfidfVectorizer(
+        self.vectorizer: TfidfVectorizer = TfidfVectorizer(
             max_features=1000, stop_words="english", ngram_range=(1, 2)
         )
-        self.model = None
-        self.feature_names = None
-        self.categories = None
-        self.centroids = None
+        self.model: Optional[KMeans] = None
+        self.feature_names: Optional[np.ndarray] = None
+        self.categories: Optional[List[str]] = None
+        self.centroids: Optional[np.ndarray] = None
 
-    def classify(self, texts, categories=None):
+    def classify(self, texts: List[str], categories: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Classify texts using TF-IDF and clustering"""
         # Vectorize the texts
-        X = self.vectorizer.fit_transform(texts)
+        X: csr_matrix = self.vectorizer.fit_transform(texts)
         self.feature_names = self.vectorizer.get_feature_names_out()
 
         # Auto-detect categories if not provided
         if not categories:
-            num_clusters = min(5, len(texts))  # Don't create more clusters than texts
+            num_clusters: int = min(5, len(texts))  # Don't create more clusters than texts
             self.categories = self._generate_default_categories(texts, num_clusters)
         else:
             self.categories = categories
@@ -42,22 +42,22 @@ class TFIDFClassifier(BaseClassifier):
 
         # Cluster the texts
         self.model = KMeans(n_clusters=num_clusters, random_state=42)
-        clusters = self.model.fit_predict(X)
+        clusters: np.ndarray = self.model.fit_predict(X)
         self.centroids = self.model.cluster_centers_
 
         # Calculate distances to centroids for confidence
-        distances = self._calculate_distances(X)
+        distances: np.ndarray = self._calculate_distances(X)
 
         # Prepare results
-        results = []
+        results: List[Dict[str, Any]] = []
         for i, text in enumerate(texts):
-            cluster_idx = clusters[i]
+            cluster_idx: int = clusters[i]
 
             # Calculate confidence (inverse of distance, normalized)
-            confidence = self._calculate_confidence(distances[i])
+            confidence: float = self._calculate_confidence(distances[i])
 
             # Create explanation
-            explanation = self._generate_explanation(X[i], cluster_idx)
+            explanation: str = self._generate_explanation(X[i], cluster_idx)
 
             results.append(
                 {
@@ -69,7 +69,7 @@ class TFIDFClassifier(BaseClassifier):
 
         return results
 
-    def _calculate_distances(self, X):
+    def _calculate_distances(self, X: csr_matrix) -> np.ndarray:
         """Calculate distances from each point to each centroid"""
         return np.sqrt(
             (
@@ -77,37 +77,37 @@ class TFIDFClassifier(BaseClassifier):
             ).sum(axis=2)
         )
 
-    def _calculate_confidence(self, distances):
+    def _calculate_confidence(self, distances: np.ndarray) -> float:
         """Convert distances to confidence scores (0-100)"""
-        min_dist = np.min(distances)
-        max_dist = np.max(distances)
+        min_dist: float = np.min(distances)
+        max_dist: float = np.max(distances)
 
         # Normalize and invert (smaller distance = higher confidence)
         if max_dist == min_dist:
             return 70  # Default mid-range confidence when all distances are equal
 
-        normalized_dist = (distances - min_dist) / (max_dist - min_dist)
-        min_normalized = np.min(normalized_dist)
+        normalized_dist: np.ndarray = (distances - min_dist) / (max_dist - min_dist)
+        min_normalized: float = np.min(normalized_dist)
 
         # Invert and scale to 50-100 range (TF-IDF is never 100% confident)
-        confidence = 100 - (min_normalized * 50)
+        confidence: float = 100 - (min_normalized * 50)
         return round(confidence, 1)
 
-    def _generate_explanation(self, text_vector, cluster_idx):
+    def _generate_explanation(self, text_vector: csr_matrix, cluster_idx: int) -> str:
         """Generate an explanation for the classification"""
         # Get the most important features for this cluster
-        centroid = self.centroids[cluster_idx]
+        centroid: np.ndarray = self.centroids[cluster_idx]
 
         # Get indices of top features for this text
-        text_array = text_vector.toarray()[0]
-        top_indices = text_array.argsort()[-5:][::-1]
+        text_array: np.ndarray = text_vector.toarray()[0]
+        top_indices: np.ndarray = text_array.argsort()[-5:][::-1]
 
         # Get the feature names for these indices
-        top_features = [self.feature_names[i] for i in top_indices if text_array[i] > 0]
+        top_features: List[str] = [self.feature_names[i] for i in top_indices if text_array[i] > 0]
 
         if not top_features:
             return "No significant features identified for this classification."
 
-        explanation = f"Classification based on key terms: {', '.join(top_features)}"
+        explanation: str = f"Classification based on key terms: {', '.join(top_features)}"
         return explanation
 

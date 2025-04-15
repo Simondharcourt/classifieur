@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv
 import pandas as pd
 from utils import validate_results
+from process import improve_classification
 
 # Load environment variables
 load_dotenv()
@@ -87,6 +88,21 @@ class ValidationResponse(BaseModel):
     accuracy_score: Optional[float] = None
     misclassifications: Optional[List[Dict[str, Any]]] = None
     suggested_improvements: Optional[List[str]] = None
+
+class ImprovementRequest(BaseModel):
+    df: Dict[str, Any]  # JSON representation of the DataFrame
+    validation_report: str
+    text_columns: List[str]
+    categories: str
+    classifier_type: str
+    show_explanations: bool
+    file_path: str
+
+class ImprovementResponse(BaseModel):
+    improved_df: Dict[str, Any]  # JSON representation of the improved DataFrame
+    new_validation_report: str
+    success: bool
+    updated_categories: List[str]
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
@@ -203,6 +219,37 @@ async def validate_classifications(validation_request: ValidationRequest) -> Val
             accuracy_score=accuracy_score,
             misclassifications=misclassifications,
             suggested_improvements=suggested_improvements
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/improve-classification", response_model=ImprovementResponse)
+async def improve_classification_endpoint(request: ImprovementRequest) -> ImprovementResponse:
+    """Improve classification based on validation report"""
+    try:
+        # Convert JSON DataFrame back to pandas DataFrame
+        df = pd.DataFrame.from_dict(request.df)
+
+        # Call the improve_classification function
+        improved_df, new_validation, success, updated_categories = await improve_classification(
+            df=df,
+            validation_report=request.validation_report,
+            text_columns=request.text_columns,
+            categories=request.categories,
+            classifier_type=request.classifier_type,
+            show_explanations=request.show_explanations,
+            file=request.file_path
+        )
+
+        # Convert improved DataFrame to JSON
+        improved_df_json = improved_df.to_dict() if improved_df is not None else None
+
+        return ImprovementResponse(
+            improved_df=improved_df_json,
+            new_validation_report=new_validation,
+            success=success,
+            updated_categories=updated_categories
         )
 
     except Exception as e:

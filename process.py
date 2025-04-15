@@ -223,7 +223,7 @@ async def improve_classification(
         response = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0,
                 max_tokens=300,

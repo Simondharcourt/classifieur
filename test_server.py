@@ -1,6 +1,7 @@
 import requests
 import json
 from typing import List, Dict, Any, Optional
+import pandas as pd
 
 BASE_URL: str = "http://localhost:8000"
 
@@ -123,6 +124,50 @@ def test_validate_classifications() -> None:
     )
     print("\nValidation results:")
     print(json.dumps(response.json(), indent=2))
+    return response.json()  # Return validation results for use in improve test
+
+def test_improve_classification() -> None:
+    """Test the improve-classification endpoint"""
+    # First get validation results
+    validation_results = test_validate_classifications()
+    
+    # Load emails from CSV file
+    import csv
+    
+    emails: List[Dict[str, str]] = []
+    with open("examples/emails.csv", "r", encoding="utf-8") as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            emails.append(row)
+    
+    # Create a DataFrame with the first 5 emails
+    df = pd.DataFrame(emails[:5])
+    
+    # Get current categories
+    categories_response: requests.Response = requests.post(
+        f"{BASE_URL}/suggest-categories",
+        json=[email["contenu"] for email in emails[:5]]
+    )
+    response_data: Dict[str, Any] = categories_response.json()
+    current_categories: str = ",".join(response_data["categories"])
+    
+    # Send improvement request
+    improvement_request: Dict[str, Any] = {
+        "df": df.to_dict(),
+        "validation_report": validation_results["validation_report"],
+        "text_columns": ["contenu"],
+        "categories": current_categories,
+        "classifier_type": "gpt35",
+        "show_explanations": True,
+        "file_path": "examples/emails.csv"
+    }
+    
+    response: requests.Response = requests.post(
+        f"{BASE_URL}/improve-classification",
+        json=improvement_request
+    )
+    print("\nImprovement results:")
+    print(json.dumps(response.json(), indent=2))
 
 if __name__ == "__main__":
     print("Testing FastAPI server endpoints...")
@@ -131,4 +176,5 @@ if __name__ == "__main__":
     test_classify_text()
     test_classify_batch()
     test_suggest_categories()
-    test_validate_classifications() 
+    test_validate_classifications()
+    test_improve_classification() 

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 import tempfile
+from prompts import VALIDATION_PROMPT
 
 
 def load_data(file_path):
@@ -133,7 +134,7 @@ def validate_results(df, text_columns, client):
         sample_size = min(5, len(df))
         sample_df = df.sample(n=sample_size, random_state=42)
 
-        # Build validation prompt
+        # Build validation prompts
         validation_prompts = []
         for _, row in sample_df.iterrows():
             # Combine text from all selected columns
@@ -145,21 +146,8 @@ def validate_results(df, text_columns, client):
                 f"Text: {text}\nAssigned Category: {assigned_category}\nConfidence: {confidence}\n"
             )
 
-        prompt = """
-        As a validation expert, review the following text classifications and provide feedback.
-        For each text, assess whether the assigned category seems appropriate:
-        
-        {}
-        
-        Provide a brief validation report with:
-        1. Overall accuracy assessment (0-100%)
-        2. Any potential misclassifications identified
-        3. Suggestions for improvement
-        
-        Keep your response under 300 words.
-        """.format(
-            "\n---\n".join(validation_prompts)
-        )
+        # Use the prompt from prompts.py
+        prompt = VALIDATION_PROMPT.format("\n---\n".join(validation_prompts))
 
         # Call LLM API
         response = client.chat.completions.create(

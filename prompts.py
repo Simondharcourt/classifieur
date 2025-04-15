@@ -61,3 +61,18 @@ Example texts:
 
 Return your answer as a comma-separated list of new category names only.
 """
+
+# Validation prompt
+VALIDATION_PROMPT = """
+As a validation expert, review the following text classifications and provide feedback.
+For each text, assess whether the assigned category seems appropriate:
+
+{}
+
+Provide a brief validation report with:
+1. Overall accuracy assessment (0-100%)
+2. Any potential misclassifications identified
+3. Suggestions for improvement
+
+Keep your response under 300 words.
+"""

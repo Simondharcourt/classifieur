@@ -1,3 +1,4 @@
 .env
 *.pyc
 /temp_exports/*
+/frontend/node_modules/*

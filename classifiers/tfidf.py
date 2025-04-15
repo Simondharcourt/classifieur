@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
 from prompts import CATEGORY_SUGGESTION_PROMPT, TEXT_CLASSIFICATION_PROMPT
 
-from base import BaseClassifier
+from .base import BaseClassifier
 
 
 class TFIDFClassifier(BaseClassifier):

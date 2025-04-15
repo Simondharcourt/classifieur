@@ -6,7 +6,13 @@ import json
 from classifiers.llm import LLMClassifier
 from litellm import completion
 import asyncio
-from client import get_client
+from client import get_client, initialize_client
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 app = FastAPI()
 
 # Configure CORS
@@ -18,7 +24,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize client with API key from environment
+api_key = os.environ.get("OPENAI_API_KEY")
+if api_key:
+    success, message = initialize_client(api_key)
+    if not success:
+        raise RuntimeError(f"Failed to initialize OpenAI client: {message}")
+
 client = get_client()
+if not client:
+    raise RuntimeError("OpenAI client not initialized. Please set OPENAI_API_KEY environment variable.")
 
 # Initialize the LLM classifier
 classifier = LLMClassifier(client=client, model="gpt-3.5-turbo")

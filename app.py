@@ -1,7 +1,7 @@
 import os
 import gradio as gr
+import asyncio
 
-from litellm import OpenAI
 import json
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -9,7 +9,9 @@ import matplotlib.pyplot as plt
 
 import logging
 from dotenv import load_dotenv
-from process import update_api_key, process_file, export_results
+from process import update_api_key, process_file_async, export_results
+from client import get_client, initialize_client
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -30,16 +32,13 @@ logging.basicConfig(
 # Initialize API key from environment variable
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
-# Only initialize client if API key is available
-client = None
+# Initialize client if API key is available
 if OPENAI_API_KEY:
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
+    success, message = initialize_client(OPENAI_API_KEY)
+    if success:
         logging.info("OpenAI client initialized successfully")
-    except Exception as e:
-        logging.error(f"Failed to initialize OpenAI client: {str(e)}")
-
-
+    else:
+        logging.error(f"Failed to initialize OpenAI client: {message}")
 
 # Create Gradio interface
 with gr.Blocks(title="Text Classification System") as demo:
@@ -57,9 +56,8 @@ with gr.Blocks(title="Text Classification System") as demo:
         api_key_message = gr.Textbox(label="Status", interactive=False)
 
         # Display current API status
-        api_status = (
-            "API Key is set" if OPENAI_API_KEY else "No API Key found. Please set one."
-        )
+        client = get_client()
+        api_status = "API Key is set" if client else "No API Key found. Please set one."
         gr.Markdown(f"**Current API Status**: {api_status}")
 
         api_key_button.click(
@@ -344,7 +342,7 @@ with gr.Blocks(title="Text Classification System") as demo:
             return gr.File(value=file_path, visible=True)
 
         # Function to improve classification based on validation report
-        def improve_classification(
+        async def improve_classification_async(
             df,
             validation_report,
             text_columns,
@@ -353,7 +351,7 @@ with gr.Blocks(title="Text Classification System") as demo:
             show_explanations,
             file,
         ):
-            """Improve classification based on validation report"""
+            """Async version of improve_classification"""
             if df is None or not validation_report:
                 return (
                     df,
@@ -420,7 +418,7 @@ with gr.Blocks(title="Text Classification System") as demo:
                             categories = ",".join(all_categories)
 
                         # Process with improved parameters
-                        improved_df, new_validation = process_file(
+                        improved_df, new_validation = await process_file_async(
                             file,
                             text_columns,
                             categories,
@@ -466,6 +464,28 @@ with gr.Blocks(title="Text Classification System") as demo:
                     ),
                 )
 
+        def improve_classification(
+            df,
+            validation_report,
+            text_columns,
+            categories,
+            classifier_type,
+            show_explanations,
+            file,
+        ):
+            """Synchronous wrapper for improve_classification_async"""
+            return asyncio.run(
+                improve_classification_async(
+                    df,
+                    validation_report,
+                    text_columns,
+                    categories,
+                    classifier_type,
+                    show_explanations,
+                    file,
+                )
+            )
+
         # Connect functions
         load_categories_button.click(
             load_file_and_suggest_categories,
@@ -506,7 +526,7 @@ with gr.Blocks(title="Text Classification System") as demo:
         process_button.click(
             lambda: gr.Dataframe(visible=True), inputs=[], outputs=[results_df]
         ).then(
-            process_file,
+            process_file_async,
             inputs=[
                 file_input,
                 text_column,

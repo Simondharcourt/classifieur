@@ -1,41 +1,22 @@
-
-
 import logging
 import time
 import traceback
+import asyncio
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from litellm import OpenAI
 from classifiers import TFIDFClassifier, LLMClassifier
 from utils import load_data, validate_results
+from client import get_client
 
 
 def update_api_key(api_key):
     """Update the OpenAI API key"""
-    global OPENAI_API_KEY, client
-
-    if not api_key:
-        return "API Key cannot be empty"
-
-    OPENAI_API_KEY = api_key
-
-    try:
-        client = OpenAI(api_key=api_key)
-        # Test the connection with a simple request
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": "test"}],
-            max_tokens=5,
-        )
-        return f"API Key updated and verified successfully"
-    except Exception as e:
-        error_msg = str(e)
-        logging.error(f"API key update failed: {error_msg}")
-        return f"Failed to update API Key: {error_msg}"
+    from client import initialize_client
+    return initialize_client(api_key)
 
 
-def process_file(file, text_columns, categories, classifier_type, show_explanations):
-    """Process the uploaded file and classify text data"""
+async def process_file_async(file, text_columns, categories, classifier_type, show_explanations):
+    """Async version of process_file"""
     # Initialize result_df and validation_report
     result_df = None
     validation_report = None
@@ -83,6 +64,9 @@ def process_file(file, text_columns, categories, classifier_type, show_explanati
             else:
                 classifier_type = "tfidf"
 
+        # Get the client instance
+        client = get_client()
+
         # Initialize appropriate classifier
         if classifier_type == "tfidf":
             classifier = TFIDFClassifier()
@@ -95,7 +79,7 @@ def process_file(file, text_columns, categories, classifier_type, show_explanati
                 )
             model = "gpt-3.5-turbo" if classifier_type == "gpt35" else "gpt-4"
             classifier = LLMClassifier(client=client, model=model)
-            results = classifier.classify(texts, category_list)
+            results = await classifier.classify_async(texts, category_list)
         else:  # hybrid
             if client is None:
                 return (
@@ -121,7 +105,7 @@ def process_file(file, text_columns, categories, classifier_type, show_explanati
                     results.append(tfidf_result)
 
             if low_confidence_texts:
-                llm_results = llm_classifier.classify(
+                llm_results = await llm_classifier.classify_async(
                     low_confidence_texts, category_list
                 )
                 for idx, llm_result in zip(low_confidence_indices, llm_results):
@@ -143,6 +127,11 @@ def process_file(file, text_columns, categories, classifier_type, show_explanati
     except Exception as e:
         error_traceback = traceback.format_exc()
         return None, f"Error: {str(e)}\n{error_traceback}"
+
+
+def process_file(file, text_columns, categories, classifier_type, show_explanations):
+    """Synchronous wrapper for process_file_async"""
+    return asyncio.run(process_file_async(file, text_columns, categories, classifier_type, show_explanations))
 
 
 def export_results(df, format_type):

@@ -6,10 +6,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from typing import Optional, List, Dict, Any, Tuple, Union
 import pandas as pd
 from pathlib import Path
+import json
 
 from classifiers import TFIDFClassifier, LLMClassifier
-from utils import load_data, validate_results
+from utils import load_data, validate_results, get_sample_texts
 from client import get_client
+from prompts import VALIDATION_ANALYSIS_PROMPT, CATEGORY_IMPROVEMENT_PROMPT
 
 
 def update_api_key(api_key: str) -> Tuple[bool, str]:
@@ -174,3 +176,103 @@ def export_results(df: pd.DataFrame, format_type: str) -> Optional[str]:
         df.to_csv(file_path, index=False)
 
     return file_path
+
+
+async def improve_classification(
+    df: pd.DataFrame,
+    validation_report: str,
+    text_columns: List[str],
+    categories: str,
+    classifier_type: str,
+    show_explanations: bool,
+    file: Union[str, Path]
+) -> Tuple[Optional[pd.DataFrame], Optional[str], bool, List[str]]:
+    """
+    Improve classification based on validation report
+
+    Args:
+        df (pd.DataFrame): Current classification results
+        validation_report (str): Validation report from previous classification
+        text_columns (List[str]): List of text column names
+        categories (str): Comma-separated list of categories
+        classifier_type (str): Type of classifier to use
+        show_explanations (bool): Whether to show explanations
+        file (Union[str, Path]): Path to the input file
+
+    Returns:
+        Tuple[Optional[pd.DataFrame], Optional[str], bool, List[str]]: 
+            - Improved dataframe
+            - New validation report
+            - Whether improvement was successful
+            - Updated categories
+    """
+    if df is None or not validation_report:
+        return None, validation_report, False, []
+
+    try:
+        client = get_client()
+        if not client:
+            return None, "Error: API client not initialized", False, []
+
+        # Extract insights from validation report
+        prompt = VALIDATION_ANALYSIS_PROMPT.format(
+            validation_report=validation_report,
+            current_categories=categories,
+        )
+
+        response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0,
+                max_tokens=300,
+            )
+        )
+
+        improvements = json.loads(response.choices[0].message.content.strip())
+        current_categories = [cat.strip() for cat in categories.split(",")]
+
+        # If new categories are needed, suggest them based on the data
+        if improvements.get("new_categories_needed", False):
+            # Get sample texts for category suggestion
+            sample_texts = get_sample_texts(df, text_columns, sample_size=10)
+
+            category_prompt = CATEGORY_IMPROVEMENT_PROMPT.format(
+                current_categories=", ".join(current_categories),
+                analysis=improvements.get("analysis", ""),
+                sample_texts="\n---\n".join(sample_texts)
+            )
+
+            category_response = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: client.chat.completions.create(
+                    model="gpt-4",
+                    messages=[{"role": "user", "content": category_prompt}],
+                    temperature=0,
+                    max_tokens=100,
+                )
+            )
+
+            new_categories = [
+                cat.strip()
+                for cat in category_response.choices[0].message.content.strip().split(",")
+            ]
+            # Combine current and new categories
+            all_categories = current_categories + new_categories
+            categories = ",".join(all_categories)
+
+        # Process with improved parameters
+        improved_df, new_validation = await process_file_async(
+            file,
+            text_columns,
+            categories,
+            classifier_type,
+            show_explanations,
+        )
+
+        return improved_df, new_validation, True, all_categories if improvements.get("new_categories_needed", False) else current_categories
+
+    except Exception as e:
+        print(f"Error in improvement process: {str(e)}")
+        return df, validation_report, False, current_categories

@@ -107,7 +107,8 @@ def test_validate_classifications() -> None:
         f"{BASE_URL}/suggest-categories",
         json=[email["contenu"] for email in emails[:5]]
     )
-    current_categories: List[str] = categories_response.json()["categories"]
+    response_data: Dict[str, Any] = categories_response.json()
+    current_categories: List[str] = response_data["categories"]  # Extract categories from the response
     
     # Send validation request
     validation_request: Dict[str, Any] = {

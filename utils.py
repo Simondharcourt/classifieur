@@ -6,7 +6,7 @@ from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
 import tempfile
 from prompts import VALIDATION_PROMPT
-from typing import List, Optional, Any, Union
+from typing import List, Optional, Any, Union, Tuple
 from pathlib import Path
 from matplotlib.figure import Figure
 
@@ -31,6 +31,52 @@ def load_data(file_path: Union[str, Path]) -> pd.DataFrame:
         raise ValueError(
             f"Unsupported file format: {file_ext}. Please upload an Excel or CSV file."
         )
+
+
+def analyze_text_columns(df: pd.DataFrame) -> List[str]:
+    """
+    Analyze columns to suggest text columns based on content analysis
+
+    Args:
+        df (pd.DataFrame): Input dataframe
+
+    Returns:
+        List[str]: List of suggested text columns
+    """
+    suggested_text_columns: List[str] = []
+    for col in df.columns:
+        if df[col].dtype == "object":  # String type
+            # Check if column contains mostly text (not just numbers or dates)
+            sample = df[col].head(100).dropna()
+            if len(sample) > 0:
+                # Check if most values contain spaces (indicating text)
+                text_ratio = sum(" " in str(val) for val in sample) / len(sample)
+                if text_ratio > 0.3:  # If more than 30% of values contain spaces
+                    suggested_text_columns.append(col)
+
+    # If no columns were suggested, use all object columns
+    if not suggested_text_columns:
+        suggested_text_columns = [col for col in df.columns if df[col].dtype == "object"]
+
+    return suggested_text_columns
+
+
+def get_sample_texts(df: pd.DataFrame, text_columns: List[str], sample_size: int = 5) -> List[str]:
+    """
+    Get sample texts from specified columns
+
+    Args:
+        df (pd.DataFrame): Input dataframe
+        text_columns (List[str]): List of text column names
+        sample_size (int): Number of samples to take from each column
+
+    Returns:
+        List[str]: List of sample texts
+    """
+    sample_texts: List[str] = []
+    for col in text_columns:
+        sample_texts.extend(df[col].head(sample_size).tolist())
+    return sample_texts
 
 
 def export_data(df: pd.DataFrame, file_name: str, format_type: str = "excel") -> str:

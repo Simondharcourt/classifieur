@@ -6,14 +6,14 @@ from sklearn.metrics.pairwise import cosine_similarity
 import random
 import json
 import asyncio
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple
 import sys
 import os
 from litellm import OpenAI
 
 # Add the project root to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from prompts import CATEGORY_SUGGESTION_PROMPT, TEXT_CLASSIFICATION_PROMPT
+from prompts import CATEGORY_SUGGESTION_PROMPT, TEXT_CLASSIFICATION_PROMPT, ADDITIONAL_CATEGORY_PROMPT
 
 from .base import BaseClassifier
 
@@ -25,6 +25,43 @@ class LLMClassifier(BaseClassifier):
         super().__init__()
         self.client: OpenAI = client
         self.model: str = model
+
+    async def _suggest_categories_async(self, texts: List[str], sample_size: int = 20) -> List[str]:
+        """Async version of category suggestion"""
+        # Take a sample of texts to avoid token limitations
+        if len(texts) > sample_size:
+            sample_texts: List[str] = random.sample(texts, sample_size)
+        else:
+            sample_texts: List[str] = texts
+
+        prompt: str = CATEGORY_SUGGESTION_PROMPT.format("\n---\n".join(sample_texts))
+
+        try:
+            # Use the synchronous client method but run it in a thread pool
+            loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
+            response: Any = await loop.run_in_executor(
+                None,
+                lambda: self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                    max_tokens=100,
+                )
+            )
+
+            # Parse response to get categories
+            categories_text: str = response.choices[0].message.content.strip()
+            categories: List[str] = [cat.strip() for cat in categories_text.split(",")]
+
+            return categories
+        except Exception as e:
+            # Fallback to default categories on error
+            print(f"Error suggesting categories: {str(e)}")
+            return self._generate_default_categories(texts)
+
+    def _generate_default_categories(self, texts: List[str]) -> List[str]:
+        """Generate default categories if LLM suggestion fails"""
+        return ["Positive", "Negative", "Neutral", "Mixed", "Other"]
 
     async def _classify_text_async(self, text: str, categories: List[str]) -> Dict[str, Any]:
         """Async version of text classification"""
@@ -86,39 +123,6 @@ class LLMClassifier(BaseClassifier):
                 "confidence": 50,
                 "explanation": f"Error during classification: {str(e)}",
             }
-
-    async def _suggest_categories_async(self, texts: List[str], sample_size: int = 20) -> List[str]:
-        """Async version of category suggestion"""
-        # Take a sample of texts to avoid token limitations
-        if len(texts) > sample_size:
-            sample_texts: List[str] = random.sample(texts, sample_size)
-        else:
-            sample_texts: List[str] = texts
-
-        prompt: str = CATEGORY_SUGGESTION_PROMPT.format("\n---\n".join(sample_texts))
-
-        try:
-            # Use the synchronous client method but run it in a thread pool
-            loop: asyncio.AbstractEventLoop = asyncio.get_event_loop()
-            response: Any = await loop.run_in_executor(
-                None,
-                lambda: self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.2,
-                    max_tokens=100,
-                )
-            )
-
-            # Parse response to get categories
-            categories_text: str = response.choices[0].message.content.strip()
-            categories: List[str] = [cat.strip() for cat in categories_text.split(",")]
-
-            return categories
-        except Exception as e:
-            # Fallback to default categories on error
-            print(f"Error suggesting categories: {str(e)}")
-            return self._generate_default_categories(texts)
 
     async def classify_async(
         self, texts: List[str], categories: Optional[List[str]] = None

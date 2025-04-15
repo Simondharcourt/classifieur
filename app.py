@@ -9,14 +9,15 @@ import matplotlib.pyplot as plt
 
 import logging
 from dotenv import load_dotenv
-from process import update_api_key, process_file_async, export_results
+from process import update_api_key, process_file_async, export_results, improve_classification
 from client import get_client, initialize_client
+from utils import load_data, visualize_results, analyze_text_columns, get_sample_texts
+from classifiers.llm import LLMClassifier
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Import local modules
-from utils import load_data, visualize_results
 from prompts import (
     CATEGORY_SUGGESTION_PROMPT,
     ADDITIONAL_CATEGORY_PROMPT,
@@ -147,7 +148,7 @@ with gr.Blocks(title="Text Classification System") as demo:
                 )
 
         # Function to load file and suggest categories
-        def load_file_and_suggest_categories(file):
+        async def load_file_and_suggest_categories(file):
             if not file:
                 return (
                     [],
@@ -167,67 +168,17 @@ with gr.Blocks(title="Text Classification System") as demo:
                 columns = list(df.columns)
 
                 # Analyze columns to suggest text columns
-                suggested_text_columns = []
-                for col in columns:
-                    # Check if column contains text data
-                    if df[col].dtype == "object":  # String type
-                        # Check if column contains mostly text (not just numbers or dates)
-                        sample = df[col].head(100).dropna()
-                        if len(sample) > 0:
-                            # Check if most values contain spaces (indicating text)
-                            text_ratio = sum(" " in str(val) for val in sample) / len(
-                                sample
-                            )
-                            if (
-                                text_ratio > 0.3
-                            ):  # If more than 30% of values contain spaces
-                                suggested_text_columns.append(col)
+                suggested_text_columns = analyze_text_columns(df)
 
-                # If no columns were suggested, use all object columns
-                if not suggested_text_columns:
-                    suggested_text_columns = [
-                        col for col in columns if df[col].dtype == "object"
-                    ]
-
-                # Get a sample of text for category suggestion
-                sample_texts = []
-                for col in suggested_text_columns:
-                    sample_texts.extend(df[col].head(5).tolist())
+                # Get sample texts for category suggestion
+                sample_texts = get_sample_texts(df, suggested_text_columns)
 
                 # Use LLM to suggest categories
                 if client:
-                    prompt = CATEGORY_SUGGESTION_PROMPT.format(
-                        "\n---\n".join(sample_texts[:5])
-                    )
-                    try:
-                        response = client.chat.completions.create(
-                            model="gpt-3.5-turbo",
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0,
-                            max_tokens=100,
-                        )
-                        suggested_cats = [
-                            cat.strip()
-                            for cat in response.choices[0]
-                            .message.content.strip()
-                            .split(",")
-                        ]
-                    except:
-                        suggested_cats = [
-                            "Positive",
-                            "Negative",
-                            "Neutral",
-                            "Mixed",
-                            "Other",
-                        ]
+                    classifier = LLMClassifier(client=client)
+                    suggested_cats = await classifier.suggest_categories_from_texts(sample_texts)
                 else:
-                    suggested_cats = [
-                        "Positive",
-                        "Negative",
-                        "Neutral",
-                        "Mixed",
-                        "Other",
-                    ]
+                    suggested_cats = ["Positive", "Negative", "Neutral", "Mixed", "Other"]
 
                 return (
                     columns,
@@ -295,7 +246,7 @@ with gr.Blocks(title="Text Classification System") as demo:
             )
 
         # Function to suggest a new category
-        def suggest_new_category(file, current_categories, text_columns):
+        async def suggest_new_category(file, current_categories, text_columns):
             if not file or not text_columns:
                 return gr.CheckboxGroup(
                     choices=current_categories, value=current_categories
@@ -303,29 +254,16 @@ with gr.Blocks(title="Text Classification System") as demo:
 
             try:
                 df = load_data(file.name)
-
-                # Get sample texts from selected columns
-                sample_texts = []
-                for col in text_columns:
-                    sample_texts.extend(df[col].head(5).tolist())
+                sample_texts = get_sample_texts(df, text_columns)
 
                 if client:
-                    prompt = ADDITIONAL_CATEGORY_PROMPT.format(
-                        existing_categories=", ".join(current_categories),
-                        sample_texts="\n---\n".join(sample_texts[:10]),
+                    classifier = LLMClassifier(client=client)
+                    new_categories = await classifier.suggest_categories_from_texts(
+                        sample_texts, current_categories
                     )
-                    try:
-                        response = client.chat.completions.create(
-                            model="gpt-3.5-turbo",
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0,
-                            max_tokens=50,
-                        )
-                        new_cat = response.choices[0].message.content.strip()
-                        if new_cat and new_cat not in current_categories:
-                            current_categories.append(new_cat)
-                    except:
-                        pass
+                    return gr.CheckboxGroup(
+                        choices=new_categories, value=new_categories
+                    )
 
                 return gr.CheckboxGroup(
                     choices=current_categories, value=current_categories
@@ -341,151 +279,6 @@ with gr.Blocks(title="Text Classification System") as demo:
                 return gr.File(visible=False)
             file_path = export_results(df, format_type)
             return gr.File(value=file_path, visible=True)
-
-        # Function to improve classification based on validation report
-        async def improve_classification_async(
-            df,
-            validation_report,
-            text_columns,
-            categories,
-            classifier_type,
-            show_explanations,
-            file,
-        ):
-            """Async version of improve_classification"""
-            if df is None or not validation_report:
-                return (
-                    df,
-                    validation_report,
-                    gr.Button(visible=False),
-                    gr.CheckboxGroup(choices=[], value=[]),
-                )
-
-            try:
-                # Extract insights from validation report
-                if client:
-                    prompt = VALIDATION_ANALYSIS_PROMPT.format(
-                        validation_report=validation_report,
-                        current_categories=categories,
-                    )
-                    try:
-                        response = client.chat.completions.create(
-                            model="gpt-4",
-                            messages=[{"role": "user", "content": prompt}],
-                            temperature=0,
-                            max_tokens=300,
-                        )
-                        improvements = json.loads(
-                            response.choices[0].message.content.strip()
-                        )
-
-                        # Get current categories
-                        current_categories = [
-                            cat.strip() for cat in categories.split(",")
-                        ]
-
-                        # If new categories are needed, suggest them based on the data
-                        if improvements.get("new_categories_needed", False):
-                            # Get sample texts for category suggestion
-                            sample_texts = []
-                            for col in text_columns:
-                                if isinstance(file, str):
-                                    temp_df = load_data(file)
-                                else:
-                                    temp_df = load_data(file.name)
-                                sample_texts.extend(temp_df[col].head(10).tolist())
-
-                            category_prompt = CATEGORY_IMPROVEMENT_PROMPT.format(
-                                current_categories=", ".join(current_categories),
-                                analysis=improvements.get("analysis", ""),
-                                sample_texts="\n---\n".join(sample_texts[:10]),
-                            )
-
-                            category_response = client.chat.completions.create(
-                                model="gpt-4",
-                                messages=[{"role": "user", "content": category_prompt}],
-                                temperature=0,
-                                max_tokens=100,
-                            )
-
-                            new_categories = [
-                                cat.strip()
-                                for cat in category_response.choices[0]
-                                .message.content.strip()
-                                .split(",")
-                            ]
-                            # Combine current and new categories
-                            all_categories = current_categories + new_categories
-                            categories = ",".join(all_categories)
-
-                        # Process with improved parameters
-                        improved_df, new_validation = await process_file_async(
-                            file,
-                            text_columns,
-                            categories,
-                            classifier_type,
-                            show_explanations,
-                        )
-
-                        return (
-                            improved_df,
-                            new_validation,
-                            gr.Button(visible=True),
-                            gr.CheckboxGroup(
-                                choices=all_categories, value=all_categories
-                            ),
-                        )
-                    except Exception as e:
-                        print(f"Error in improvement process: {str(e)}")
-                        return (
-                            df,
-                            validation_report,
-                            gr.Button(visible=True),
-                            gr.CheckboxGroup(
-                                choices=current_categories, value=current_categories
-                            ),
-                        )
-                else:
-                    return (
-                        df,
-                        validation_report,
-                        gr.Button(visible=True),
-                        gr.CheckboxGroup(
-                            choices=current_categories, value=current_categories
-                        ),
-                    )
-            except Exception as e:
-                print(f"Error in improvement process: {str(e)}")
-                return (
-                    df,
-                    validation_report,
-                    gr.Button(visible=True),
-                    gr.CheckboxGroup(
-                        choices=current_categories, value=current_categories
-                    ),
-                )
-
-        def improve_classification(
-            df,
-            validation_report,
-            text_columns,
-            categories,
-            classifier_type,
-            show_explanations,
-            file,
-        ):
-            """Synchronous wrapper for improve_classification_async"""
-            return asyncio.run(
-                improve_classification_async(
-                    df,
-                    validation_report,
-                    text_columns,
-                    categories,
-                    classifier_type,
-                    show_explanations,
-                    file,
-                )
-            )
 
         # Connect functions
         load_categories_button.click(

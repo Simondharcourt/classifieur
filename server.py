@@ -9,6 +9,8 @@ import asyncio
 from client import get_client, initialize_client
 import os
 from dotenv import load_dotenv
+import pandas as pd
+from utils import validate_results
 
 # Load environment variables
 load_dotenv()
@@ -44,13 +46,66 @@ class TextInput(BaseModel):
     text: str
     categories: Optional[List[str]] = None
 
+class BatchTextInput(BaseModel):
+    texts: List[str]
+    categories: Optional[List[str]] = None
+
 class ClassificationResponse(BaseModel):
     category: str
     confidence: float
     explanation: str
 
+class BatchClassificationResponse(BaseModel):
+    results: List[ClassificationResponse]
+
 class CategorySuggestionResponse(BaseModel):
     categories: List[str]
+
+class ModelInfoResponse(BaseModel):
+    model_name: str
+    model_version: str
+    max_tokens: int
+    temperature: float
+
+class HealthResponse(BaseModel):
+    status: str
+    model_ready: bool
+    api_key_configured: bool
+
+class ValidationSample(BaseModel):
+    text: str
+    assigned_category: str
+    confidence: float
+
+class ValidationRequest(BaseModel):
+    samples: List[ValidationSample]
+    current_categories: List[str]
+    text_columns: List[str]
+
+class ValidationResponse(BaseModel):
+    validation_report: str
+    accuracy_score: Optional[float] = None
+    misclassifications: Optional[List[Dict[str, Any]]] = None
+    suggested_improvements: Optional[List[str]] = None
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check() -> HealthResponse:
+    """Check the health status of the API"""
+    return HealthResponse(
+        status="healthy",
+        model_ready=client is not None,
+        api_key_configured=api_key is not None
+    )
+
+@app.get("/model-info", response_model=ModelInfoResponse)
+async def get_model_info() -> ModelInfoResponse:
+    """Get information about the current model configuration"""
+    return ModelInfoResponse(
+        model_name=classifier.model,
+        model_version="1.0",
+        max_tokens=200,
+        temperature=0
+    )
 
 @app.post("/classify", response_model=ClassificationResponse)
 async def classify_text(text_input: TextInput) -> ClassificationResponse:
@@ -70,11 +125,86 @@ async def classify_text(text_input: TextInput) -> ClassificationResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/classify-batch", response_model=BatchClassificationResponse)
+async def classify_batch(batch_input: BatchTextInput) -> BatchClassificationResponse:
+    """Classify multiple texts in a single request"""
+    try:
+        results: List[Dict[str, Any]] = await classifier.classify_async(
+            batch_input.texts,
+            batch_input.categories
+        )
+        
+        return BatchClassificationResponse(
+            results=[
+                ClassificationResponse(
+                    category=r["category"],
+                    confidence=r["confidence"],
+                    explanation=r["explanation"]
+                ) for r in results
+            ]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/suggest-categories", response_model=CategorySuggestionResponse)
 async def suggest_categories(texts: List[str]) -> CategorySuggestionResponse:
     try:
         categories: List[str] = await classifier._suggest_categories_async(texts)
         return CategorySuggestionResponse(categories=categories)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/validate", response_model=ValidationResponse)
+async def validate_classifications(validation_request: ValidationRequest) -> ValidationResponse:
+    """Validate classification results and provide improvement suggestions"""
+    try:
+        # Convert samples to DataFrame
+        df = pd.DataFrame([
+            {
+                "text": sample.text,
+                "Category": sample.assigned_category,
+                "Confidence": sample.confidence
+            }
+            for sample in validation_request.samples
+        ])
+
+        # Use the validate_results function from utils
+        validation_report: str = validate_results(df, validation_request.text_columns, client)
+
+        # Parse the validation report to extract structured information
+        accuracy_score: Optional[float] = None
+        misclassifications: Optional[List[Dict[str, Any]]] = None
+        suggested_improvements: Optional[List[str]] = None
+
+        # Extract accuracy score if present
+        if "accuracy" in validation_report.lower():
+            try:
+                accuracy_str = validation_report.lower().split("accuracy")[1].split("%")[0].strip()
+                accuracy_score = float(accuracy_str) / 100
+            except:
+                pass
+
+        # Extract misclassifications
+        misclassifications = [
+            {"text": sample.text, "current_category": sample.assigned_category}
+            for sample in validation_request.samples
+            if sample.confidence < 70
+        ]
+
+        # Extract suggested improvements
+        suggested_improvements = [
+            "Review low confidence classifications",
+            "Consider adding more training examples",
+            "Refine category definitions"
+        ]
+
+        return ValidationResponse(
+            validation_report=validation_report,
+            accuracy_score=accuracy_score,
+            misclassifications=misclassifications,
+            suggested_improvements=suggested_improvements
+        )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
